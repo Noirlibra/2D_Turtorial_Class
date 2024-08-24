@@ -409,10 +409,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   groundLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   wallLayer:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 8
   speed: 10
   jumpPower: 20
 --- !u!1 &1400398704
@@ -435,7 +435,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!212 &1400398705
 SpriteRenderer:
   m_ObjectHideFlags: 0
