@@ -3,28 +3,33 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    [SerializeField] private LayerMask groundLayer;
-    [SerializeField] private float speed;
-    [SerializeField] private float jumpPower;
-    [SerializeField] private float dashSpeed; // Tốc độ dash
-    [SerializeField] private float dashDuration; // Thời gian dash
-    [SerializeField] private GameObject dashEffectPrefab; // Prefab cho hiệu ứng dash
+    // Các biến SerializeField cho phép điều chỉnh các giá trị trong Unity Editor
+    [SerializeField] private LayerMask groundLayer; // Lớp đất để kiểm tra xem nhân vật có chạm đất không
+    [SerializeField] private float speed; // Tốc độ di chuyển của nhân vật
+    [SerializeField] private float jumpPower; // Lực nhảy của nhân vật
+    [SerializeField] private float dashSpeed; // Tốc độ khi Dash
+    [SerializeField] private float dashDuration; // Thời gian kéo dài của Dash
+    [SerializeField] private GameObject dashEffectPrefab; // Prefab cho hiệu ứng Dash
 
-    private Transform groundCheck;
-    private float checkRadius = 0.6f;
-    private Animator anim;
-    private BoxCollider2D boxCollider;
-    private Rigidbody2D body;
-    private float horizontalInput;
-    private bool canMove = true;
-    private bool isDashing = false;
-    private bool isDizzy = false;
+    private Transform groundCheck; // Đối tượng kiểm tra xem nhân vật có chạm đất không
+    private float checkRadius = 0.55f; // Bán kính kiểm tra chạm đất
+    private Animator anim; // Animator để điều khiển các hoạt ảnh
+    private BoxCollider2D boxCollider; // Collider để kiểm tra các va chạm
+    private Rigidbody2D body; // Rigidbody2D để điều khiển vật lý của nhân vật
+    private float horizontalInput; // Nhận input di chuyển ngang
+    private bool canMove = true; // Cờ cho phép di chuyển
+    private bool isDashing = false; // Cờ kiểm tra xem nhân vật đang Dash không
+    private bool isDizzy = false; // Cờ kiểm tra xem nhân vật đang bị choáng không
+    private bool isCrouching = false; // Cờ kiểm tra xem nhân vật đang Crouch không
 
     private void Awake()
     {
+        // Khởi tạo các thành phần khi bắt đầu game
         body = GetComponent<Rigidbody2D>();
         anim = GetComponent<Animator>();
         boxCollider = GetComponent<BoxCollider2D>();
+
+        // Tạo đối tượng kiểm tra chạm đất và gán vị trí
         groundCheck = new GameObject("GroundCheck").transform;
         groundCheck.parent = transform;
         groundCheck.localPosition = new Vector3(0, -boxCollider.bounds.extents.y, 0);
@@ -32,151 +37,178 @@ public class PlayerMovement : MonoBehaviour
 
     private void Update()
     {
-        // Nếu không đang Dash và có thể di chuyển, xử lý di chuyển và các hành động khác
+        // Nếu có thể di chuyển và không đang Dash, xử lý các hành động
         if (canMove && !isDashing)
         {
+            HandleMovement(); // Xử lý di chuyển
+            HandleAnimations(); // Xử lý hoạt ảnh
+            HandleActions(); // Xử lý các hành động khác (nhảy, crouch, dizzy, dash)
+        }
+
+        AdjustGravityScale(); // Điều chỉnh trọng lực dựa vào trạng thái rơi
+    }
+
+    private void HandleMovement()
+    {
+        // Nhận input di chuyển ngang nếu không crouch
+        if (!isCrouching)
+        {
             horizontalInput = Input.GetAxis("Horizontal");
-            // Di chuyển nhân vật theo trục X
             body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);
 
-            if (!isGrounded() && body.velocity.y < 0)
-            {
-                body.gravityScale = 5; // Trọng lực nhẹ hơn khi rơi xuống
-            }
-            else
-            {
-                body.gravityScale = 7; // Trọng lực bình thường
-            }
-
+            // Thay đổi hướng nhân vật dựa vào hướng di chuyển
             if (horizontalInput > 0.01f)
-            {
-                transform.localScale = Vector3.one;
-            }
+                transform.localScale = Vector3.one; // Hướng về phía phải
             else if (horizontalInput < -0.01f)
-            {
-                transform.localScale = new Vector3(-1, 1, 1);
-            }
-
-            // Đặt hoạt ảnh chạy hoặc idle chỉ khi không dash
-            if (!isDashing)
-            {
-                anim.SetBool("Run", horizontalInput != 0);
-            }
-            anim.SetBool("Grounded", isGrounded());
-
-            // Dash khi nhấn phím Shift trái
-            if (Input.GetKeyDown(KeyCode.LeftShift) && !isDizzy)
-            {
-                StartCoroutine(Dash());
-            }
+                transform.localScale = new Vector3(-1, 1, 1); // Hướng về phía trái
         }
+    }
+
+    private void HandleAnimations()
+    {
+        // Cập nhật trạng thái hoạt ảnh dựa vào input và trạng thái chạm đất
+        anim.SetBool("Run", horizontalInput != 0);
+        anim.SetBool("Grounded", isGrounded());
+        anim.SetBool("isCrouching", isCrouching);
+    }
+
+    private void HandleActions()
+    {
+        // Xử lý các hành động khi nhấn phím
+        if (Input.GetKeyDown(KeyCode.LeftShift) && !isDizzy)
+            StartCoroutine(Dash()); // Bắt đầu Coroutine Dash
 
         if (Input.GetKeyDown(KeyCode.S) && isGrounded() && !isDizzy)
-        {
-            Crouch();
-            canMove = false;
-            body.gravityScale = 10000;
-        }
-        if (Input.GetKeyUp(KeyCode.S) && isGrounded())
-        {
-            anim.SetBool("isCrouching", false);
-            canMove = true;
-            body.gravityScale = 7;
-        }
+            StartCoroutine(CrouchRoutine()); // Bắt đầu Coroutine Crouch
+
         if (Input.GetKey(KeyCode.P) && !isDizzy)
-        {
-            StartCoroutine(DizzyRoutine());
-        }
+            StartCoroutine(DizzyRoutine()); // Bắt đầu Coroutine Dizzy
+
         if (Input.GetButtonDown("Jump") && isGrounded())
-        {
-            Jump();
-        }
+            Jump(); // Xử lý nhảy
+
+        if (Input.GetMouseButtonDown(1))
+            Cast(); // Xử lý hành động Cast
+
+        if (Input.GetMouseButtonDown(0))
+            Attack(); // Xử lý hành động Attack
     }
 
     private void Jump()
     {
-        if (isGrounded())
+        // Thực hiện nhảy nếu nhân vật đang chạm đất và không trong các trạng thái khác
+        if (isGrounded() && !isDizzy && !isDashing && !isCrouching)
         {
-            body.velocity = new Vector2(body.velocity.x, jumpPower);
-            anim.SetTrigger("Jump");
-            body.gravityScale = 7;
+            body.velocity = new Vector2(body.velocity.x, jumpPower); // Cập nhật vận tốc nhảy
+            anim.SetTrigger("Jump"); // Kích hoạt trigger cho hoạt ảnh nhảy
         }
     }
 
-    private void Crouch()
+    private IEnumerator CrouchRoutine()
     {
-        anim.SetBool("isCrouching", true);
+        // Xử lý hành động crouch
+        isCrouching = true;
+        anim.SetBool("isCrouching", true); // Bật hoạt ảnh crouch
+        canMove = false; // Ngăn không cho di chuyển
+
+        // Chờ cho đến khi phím S được thả ra
+        yield return new WaitUntil(() => !Input.GetKey(KeyCode.S));
+
+        isCrouching = false;
+        anim.SetBool("isCrouching", false); // Tắt hoạt ảnh crouch
+        canMove = true; // Cho phép di chuyển trở lại
     }
 
     private bool isGrounded()
     {
+        // Kiểm tra xem nhân vật có đang chạm đất không
         return Physics2D.OverlapCircle(groundCheck.position, checkRadius, groundLayer);
-    }
-
-    public bool canAttack()
-    {
-        return horizontalInput == 0 && isGrounded();
     }
 
     private IEnumerator DizzyRoutine()
     {
+        // Xử lý hành động bị choáng
         isDizzy = true;
-        canMove = false;
-        anim.SetBool("isDizzy", true);
-        yield return new WaitForSeconds(2);
-        canMove = true;
-        anim.SetBool("isDizzy", false);
+        canMove = false; // Ngăn không cho di chuyển
+        anim.SetBool("isDizzy", true); // Bật hoạt ảnh bị choáng
+        yield return new WaitForSeconds(2); // Chờ 2 giây
+        canMove = true; // Cho phép di chuyển trở lại
+        anim.SetBool("isDizzy", false); // Tắt hoạt ảnh bị choáng
         isDizzy = false;
     }
 
     private IEnumerator Dash()
     {
+        // Xử lý hành động Dash
         isDashing = true;
-        canMove = false; // Ngăn không cho di chuyển khi đang Dash
+        canMove = false; // Ngăn không cho di chuyển
 
-        // Đặt vận tốc dash ngay lập tức và kích hoạt hoạt ảnh dash
-        float dashDirection = transform.localScale.x; // Hướng dash dựa vào hướng nhân vật đang đối mặt
-        body.velocity = new Vector2(dashDirection * dashSpeed, body.velocity.y); // Set vận tốc dash (giữ lại tốc độ trục Y)
+        // Cập nhật vận tốc Dash
+        float dashDirection = transform.localScale.x; // Xác định hướng dash dựa vào hướng nhân vật
+        body.velocity = new Vector2(dashDirection * dashSpeed, body.velocity.y); // Thiết lập vận tốc dash
         anim.SetTrigger("Dash"); // Kích hoạt trigger cho hoạt ảnh dash
-        anim.SetBool("isDashing", true); // Set trạng thái để chuyển sang hoạt ảnh dash
+        anim.SetBool("isDashing", true); // Đặt trạng thái Dash
 
-        // Tạo hiệu ứng dash ngay lập tức
+        // Tạo hiệu ứng Dash nếu có
         if (dashEffectPrefab != null)
         {
             GameObject effect = Instantiate(dashEffectPrefab, transform.position, Quaternion.identity);
             effect.transform.localScale = transform.localScale; // Flip hiệu ứng theo hướng nhân vật
-            Vector3 effectPosition = new Vector3(transform.position.x, transform.position.y - 1f, transform.position.z);
-            effect.transform.position = effectPosition;
+            effect.transform.position = new Vector3(transform.position.x, transform.position.y - 1f, transform.position.z);
 
+            // Xóa hiệu ứng sau khi hoạt ảnh kết thúc
             Animator effectAnimator = effect.GetComponent<Animator>();
-            if (effectAnimator != null)
-            {
-                AnimatorClipInfo[] clipInfo = effectAnimator.GetCurrentAnimatorClipInfo(0);
-                if (clipInfo.Length > 0)
-                {
-                    float animationLength = clipInfo[0].clip.length;
-                    Destroy(effect, animationLength); // Xóa hiệu ứng sau khi hoạt ảnh kết thúc
-                }
-            }
-            else
-            {
-                Destroy(effect, dashDuration); // Thời gian tồn tại của hiệu ứng bằng thời gian dash
-            }
-        }
-        else
-        {
-            Debug.LogWarning("DashEffectPrefab is not assigned.");
+            float animationLength = effectAnimator ? effectAnimator.GetCurrentAnimatorClipInfo(0)[0].clip.length : dashDuration;
+            Destroy(effect, animationLength);
         }
 
-        yield return new WaitForSeconds(dashDuration); // Đợi thời gian dash
+        yield return new WaitForSeconds(dashDuration); // Chờ thời gian Dash
 
-        // Sau khi dash, chuyển trạng thái nhân vật về lại bình thường
-        isDashing = false;
+        isDashing = false; // Đặt lại trạng thái Dash
         canMove = true; // Cho phép di chuyển trở lại
-        anim.SetBool("isDashing", false); // Đặt biến IsDashing về false để chuyển về trạng thái idle
+        anim.SetBool("isDashing", false); // Tắt trạng thái Dash
+        anim.ResetTrigger("Dash"); // Reset trigger để ngăn ngừa Dash liên tục
+    }
 
-        // Đảm bảo nhân vật về trạng thái Idle hoặc Run tùy thuộc vào điều kiện
-        anim.SetBool("Run", horizontalInput != 0);
-        anim.ResetTrigger("Dash"); // Reset trigger để ngăn ngừa dash liên tục
+    private void Cast()
+    {
+        if (isGrounded() && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Cast"))
+        {
+            anim.SetTrigger("Cast");
+            anim.SetBool("isCasting", true);
+            canMove = false;
+            StartCoroutine(ResetAction("isCasting"));
+        }
+    }
+
+    private void Attack()
+    {
+        if (isGrounded() && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Attack"))
+        {
+            anim.SetTrigger("Attack");
+            anim.SetBool("isAttacking", true);
+            canMove = false;
+            StartCoroutine(ResetAction("isAttacking"));
+        }
+    }
+
+    private IEnumerator ResetAction(string actionBoolName)
+    {
+        // Xử lý reset trạng thái hành động (Casting, Attacking)
+        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(0);
+        yield return new WaitForSeconds(stateInfo.length);
+        anim.SetBool(actionBoolName, false);
+        canMove = true;
+    }
+
+    private void AdjustGravityScale()
+    {
+        // Điều chỉnh trọng lực khi nhân vật đang rơi để chuyển động mượt mà hơn
+        if (!isGrounded() && body.velocity.y < 0)
+            body.gravityScale = 5; // Giảm trọng lực khi rơi
+        else if (Input.GetKey(KeyCode.S))
+            body.gravityScale = 10000;
+        else
+            body.gravityScale = 7; // Khôi phục trọng lực bình thường
     }
 }
