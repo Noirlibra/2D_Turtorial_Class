@@ -10,6 +10,10 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float dashSpeed; // Tốc độ khi Dash
     [SerializeField] private float dashDuration; // Thời gian kéo dài của Dash
     [SerializeField] private GameObject dashEffectPrefab; // Prefab cho hiệu ứng Dash
+    [SerializeField] private float castCooldown;
+    [SerializeField] private Transform firePoint;
+    [SerializeField] private GameObject fireBallsPrefabs;
+    private float cooldownTimer;
 
     private Transform groundCheck; // Đối tượng kiểm tra xem nhân vật có chạm đất không
     private float checkRadius = 0.55f; // Bán kính kiểm tra chạm đất
@@ -88,7 +92,10 @@ public class PlayerMovement : MonoBehaviour
             Jump(); // Xử lý nhảy
 
         if (Input.GetMouseButtonDown(1))
+        {
             Cast(); // Xử lý hành động Cast
+        }
+        cooldownTimer += Time.deltaTime;
 
         if (Input.GetMouseButtonDown(0))
             Attack(); // Xử lý hành động Attack
@@ -172,12 +179,23 @@ public class PlayerMovement : MonoBehaviour
 
     private void Cast()
     {
-        if (isGrounded() && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Cast"))
+        if (cooldownTimer >= castCooldown && isGrounded() && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Cast"))
         {
+            cooldownTimer = 0;
             anim.SetTrigger("Cast");
             anim.SetBool("isCasting", true);
             canMove = false;
+            if (fireBallsPrefabs != null)
+            {
+                GameObject fireBalls = Instantiate(fireBallsPrefabs, firePoint.position, Quaternion.identity);
+                Projecttile projecttileScript = fireBalls.GetComponent<Projecttile>();
+                if (projecttileScript != null)
+                {
+                    projecttileScript.SetDirection(transform.localScale.x);
+                }
+            }
             StartCoroutine(ResetAction("isCasting"));
+            
         }
     }
 
@@ -210,5 +228,9 @@ public class PlayerMovement : MonoBehaviour
             body.gravityScale = 10000;
         else
             body.gravityScale = 7; // Khôi phục trọng lực bình thường
+    }
+    public bool canCast()
+    {
+        return horizontalInput == 0 && isGrounded();
     }
 }
