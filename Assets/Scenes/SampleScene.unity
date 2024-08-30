@@ -573,13 +573,14 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   speed: 10
-  jumpPower: 20
-  dashSpeed: 15
+  jumpPower: 15
+  dashSpeed: 10
   dashDuration: 0.3
   dashEffectPrefab: {fileID: 4695096423415023290, guid: 2ce45e6871fb85345a4a37d1e203bda9, type: 3}
   castCooldown: 0.5
   firePoint: {fileID: 544384845}
   fireBallsPrefabs: {fileID: 3799038150521985905, guid: 96ca8d74d9aa1074aaadcd51f7fddf21, type: 3}
+  delayCasting: 0.5
 --- !u!1 &1400398704
 GameObject:
   m_ObjectHideFlags: 0

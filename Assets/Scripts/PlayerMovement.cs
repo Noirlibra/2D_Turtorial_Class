@@ -13,6 +13,7 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float castCooldown;
     [SerializeField] private Transform firePoint;
     [SerializeField] private GameObject fireBallsPrefabs;
+    [SerializeField] private float delayCasting;
     private float cooldownTimer;
 
     private Transform groundCheck; // Đối tượng kiểm tra xem nhân vật có chạm đất không
@@ -185,15 +186,7 @@ public class PlayerMovement : MonoBehaviour
             anim.SetTrigger("Cast");
             anim.SetBool("isCasting", true);
             canMove = false;
-            if (fireBallsPrefabs != null)
-            {
-                GameObject fireBalls = Instantiate(fireBallsPrefabs, firePoint.position, Quaternion.identity);
-                Projecttile projecttileScript = fireBalls.GetComponent<Projecttile>();
-                if (projecttileScript != null)
-                {
-                    projecttileScript.SetDirection(transform.localScale.x);
-                }
-            }
+            StartCoroutine(DelayCastTime());
             StartCoroutine(ResetAction("isCasting"));
             
         }
@@ -213,9 +206,18 @@ public class PlayerMovement : MonoBehaviour
     private IEnumerator ResetAction(string actionBoolName)
     {
         // Xử lý reset trạng thái hành động (Casting, Attacking)
-        AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(0);
-        yield return new WaitForSeconds(stateInfo.length);
-        anim.SetBool(actionBoolName, false);
+        if (actionBoolName == "isAttacking")
+        {
+            AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(0);
+            yield return new WaitForSeconds(0.3f);
+            anim.SetBool(actionBoolName, false);
+        }
+        else
+        {
+            AnimatorStateInfo stateInfo = anim.GetCurrentAnimatorStateInfo(0);
+            yield return new WaitForSeconds(stateInfo.length);
+            anim.SetBool(actionBoolName, false);
+        }
         canMove = true;
     }
 
@@ -232,5 +234,18 @@ public class PlayerMovement : MonoBehaviour
     public bool canCast()
     {
         return horizontalInput == 0 && isGrounded();
+    }
+    private IEnumerator DelayCastTime()
+    {
+        yield return new WaitForSeconds(delayCasting);
+        if (fireBallsPrefabs != null)
+        {
+            GameObject fireBalls = Instantiate(fireBallsPrefabs, firePoint.position, Quaternion.identity);
+            Projecttile projecttileScript = fireBalls.GetComponent<Projecttile>();
+            if (projecttileScript != null)
+            {
+                projecttileScript.SetDirection(transform.localScale.x);
+            }
+        }
     }
 }
