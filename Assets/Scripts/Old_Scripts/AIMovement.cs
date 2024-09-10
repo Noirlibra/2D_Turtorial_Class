@@ -6,13 +6,13 @@ public class AIMovement : MonoBehaviour
     [SerializeField] private LayerMask groundLayer;
     [SerializeField] private float speed;
     [SerializeField] private float jumpPower;
-    [SerializeField] private float dashSpeed;
-    [SerializeField] private float dashDuration;
+    [SerializeField] private float flykickSpeed;
     [SerializeField] private float castCooldown;
     [SerializeField] private float delayCasting;
     [SerializeField] private float strikeSpeed;
     [SerializeField] private float strikeDuration;
-    [SerializeField] private GameObject dashEffectPrefab;
+    [SerializeField] private float flykickDuration;
+    [SerializeField] private GameObject EffectPrefab;
     [SerializeField] private Transform firePoint;
     [SerializeField] private GameObject fireBallsPrefabs;
 
@@ -27,7 +27,7 @@ public class AIMovement : MonoBehaviour
     private Rigidbody2D body;
     private float horizontalInput;
     private bool canMove = true;
-    private bool isDashing = false;
+    private bool isFlyKicking = false;
     private bool isDizzy = false;
     private bool isCrouching = false;
     private bool isStriking = false;
@@ -46,7 +46,7 @@ public class AIMovement : MonoBehaviour
     }
     private void Update()
     {
-        if (canMove && !isDashing)
+        if (canMove && !isFlyKicking)
         {
             HandleActions();
             HandleMovement();
@@ -77,31 +77,23 @@ public class AIMovement : MonoBehaviour
     private void HandleActions()
     {
         if (Input.GetKeyDown(KeyCode.LeftShift) && !isDizzy)
-            StartCoroutine(Dash());
+            StartCoroutine(FlyKick());
         if (Input.GetKeyDown(KeyCode.S) && isGrounded() && !isDizzy)
             StartCoroutine(CrouchRoutine());
         if (Input.GetKey(KeyCode.P) && !isDizzy)
             StartCoroutine(DizzyRoutine());
         if (Input.GetKeyDown(KeyCode.Space) && isGrounded())
-        {
-            anim.SetBool("isJumping", true);
             Jump();
-            Debug.Log("Jump");
-        }
         if (isJumping && Input.GetMouseButtonDown(0))
-        {
             JumpATK();
-        }
-        if (Input.GetMouseButtonDown(1))
-            Cast();
         if (isGrounded() && Input.GetMouseButtonDown(0) && !isJumping)
             Attack();
-        if (Input.GetKey(KeyCode.F))
+        if (Input.GetMouseButton(1))
             StartCoroutine(Strike());
-        if (Input.GetKeyDown(KeyCode.W) && isGrounded() && !isDizzy)
-            Block();
         if (Input.GetKeyDown(KeyCode.E))
             Win();
+        if (Input.GetKeyDown(KeyCode.F))
+            Strike();
         if (Input.GetKeyDown(KeyCode.R))
             Die();
         if (Input.GetKeyDown(KeyCode.Q))
@@ -109,7 +101,7 @@ public class AIMovement : MonoBehaviour
     }
     private void Jump()
     {
-        if (isGrounded() && !isDizzy && !isDashing && !isCrouching && !isStriking)
+        if (isGrounded() && !isDizzy && !isFlyKicking && !isCrouching && !isStriking)
         {
             isJumping = true;
             body.velocity = new Vector2(body.velocity.x, jumpPower);
@@ -123,29 +115,39 @@ public class AIMovement : MonoBehaviour
         {
             anim.SetTrigger("JumpATK");
             anim.SetBool("isJumping", true);
+            StartCoroutine(DelayAttackTime());
+        }
+    }
+    private void CrouchATK()
+    {
+        if (isCrouching)
+        {
+            anim.SetBool("isCrouching", true);
+            anim.SetBool("isCrouchingATK", true);
+            StartCoroutine(DelayAttackTime());
         }
     }
     private IEnumerator CrouchRoutine()
     {
         isCrouching = true;
         anim.SetBool("isCrouching", true);
+        anim.SetBool("isCrouchingATK", false);
         canMove = false;
 
-        yield return new WaitUntil(() => !Input.GetKey(KeyCode.S));
+        while (Input.GetKey(KeyCode.S))
+        {
+            if (Input.GetMouseButtonDown(0))
+            {
+                CrouchATK();
+                yield return new WaitForSeconds(0.5f);
+                anim.SetBool("isCrouchingATK", false);
+            }
+            yield return null;
+        }
 
         isCrouching = false;
         anim.SetBool("isCrouching", false);
         canMove = true;
-    }
-    private void Block()
-    {
-        if (isGrounded() && !isDizzy && !isDashing && canMove)
-        {
-            canMove = false;
-            anim.SetTrigger("Block");
-            anim.SetBool("isBlocking", true);
-            StartCoroutine(ResetAction("isBlocking"));
-        }
     }
     private bool isGrounded()
     {
@@ -172,75 +174,74 @@ public class AIMovement : MonoBehaviour
         anim.SetBool("isDizzy", false);
         isDizzy = false;
     }
-    private IEnumerator Dash()
+    private IEnumerator FlyKick()
     {
-        if (isGrounded() && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Dash"))
+        if (isGrounded() && !isDizzy && !isFlyKicking && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("FlyKick"))
         {
-            isDashing = true;
+            isFlyKicking = true;
             canMove = false;
 
-            // Sử dụng giá trị dashSpeed làm tốc độ dash chính, và thêm một giá trị bổ sung để đảm bảo chuyển động
-            float dashDirection = transform.localScale.x;
-            float dashAmount = dashSpeed; // Đây là tốc độ dash chính
-            body.velocity = new Vector2(dashDirection * dashAmount, body.velocity.y);
+            float flykickDirection = transform.localScale.x + 1f;
+            float flykickAmount = flykickSpeed;
+            body.velocity = new Vector2(flykickAmount * flykickDirection, body.velocity.y);
 
-            anim.SetTrigger("Dash");
-            anim.SetBool("isDashing", true);
+            anim.SetTrigger("FlyKick");
+            anim.SetBool("isFlyKicking", true);
 
-            if (dashEffectPrefab != null)
+            if (EffectPrefab != null)
             {
-                GameObject effect = Instantiate(dashEffectPrefab, transform.position, Quaternion.identity);
+                GameObject effect = Instantiate(EffectPrefab, transform.position, Quaternion.identity);
                 effect.transform.localScale = transform.localScale;
-                effect.transform.position = new Vector3(transform.position.x, transform.position.y - 1f, transform.position.z);
+                effect.transform.position = new Vector3(transform.position.x, transform.position.y - 0.5f, transform.position.z);
 
                 Animator effectAnimator = effect.GetComponent<Animator>();
-                float animationLength = effectAnimator ? effectAnimator.GetCurrentAnimatorClipInfo(0)[0].clip.length : dashDuration;
+                float animationLength = effectAnimator ? effectAnimator.GetCurrentAnimatorClipInfo(0)[0].clip.length : flykickDuration;
                 Destroy(effect, animationLength);
             }
 
-            yield return new WaitForSeconds(dashDuration);
+            yield return new WaitForSeconds(flykickDuration);
 
-            isDashing = false;
+            isFlyKicking = false;
             canMove = true;
-            anim.SetBool("isDashing", false);
-            anim.ResetTrigger("Dash");
-        }
-    }
-
-    private void Cast()
-    {
-        if (cooldownTimer >= castCooldown && isGrounded() && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Cast"))
-        {
-            cooldownTimer = 0;
-            anim.SetTrigger("Cast");
-            anim.SetBool("isCasting", true);
-            canMove = false;
-            StartCoroutine(DelayCastTime());
-            StartCoroutine(ResetAction("isCasting"));
+            anim.SetBool("isFlyKicking", false);
+            anim.ResetTrigger("FlyKick");
         }
     }
     private void Attack()
     {
-        if (!isJumping && !isDizzy && !isDashing && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Attack"))
+        if (cooldownTimer >= castCooldown && !isJumping && !isDizzy && !isFlyKicking && canMove && !anim.GetCurrentAnimatorStateInfo(0).IsName("Attack"))
         {
+            cooldownTimer = 0;
             anim.SetTrigger("Attack");
             anim.SetBool("isAttacking", true);
             canMove = false;
+            StartCoroutine(DelayAttackTime());
             StartCoroutine(ResetAction("isAttacking"));
         }
     }
     private IEnumerator Strike()
     {
-        if (isGrounded() && !isDizzy && !isDashing && canMove && !isStriking)
+        if (isGrounded() && !isDizzy && canMove && !isStriking)
         {
             isStriking = true;
             canMove = false;
 
-            float strikeDirection = transform.localScale.x;
-            body.velocity = new Vector2(strikeDirection * strikeSpeed, body.velocity.y);
+            float strikeDirection = transform.localScale.x + 1f;
+            float strikeAmount = strikeSpeed;
+            body.velocity = new Vector2(strikeDirection * strikeAmount, body.velocity.y);
 
             anim.SetTrigger("Strike");
             anim.SetBool("isStriking", true);
+            if (EffectPrefab != null)
+            {
+                GameObject effect = Instantiate(EffectPrefab, transform.position, Quaternion.identity);
+                effect.transform.localScale = transform.localScale;
+                effect.transform.position = new Vector3(transform.position.x, transform.position.y - 0.5f, transform.position.z);
+
+                Animator effectAnimator = effect.GetComponent<Animator>();
+                float animationLength = effectAnimator ? effectAnimator.GetCurrentAnimatorClipInfo(0)[0].clip.length : strikeDuration;
+                Destroy(effect, animationLength);
+            }
 
             yield return new WaitForSeconds(strikeDuration);
 
@@ -288,14 +289,16 @@ public class AIMovement : MonoBehaviour
     {
         if (!isGrounded() && body.velocity.y < 0)
             body.gravityScale = 5;
-        else if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.W) || Input.GetMouseButton(1))
+        else if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.W))
             body.gravityScale = 10000;
+        else if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.F) || Input.GetMouseButton(1))
+            body.gravityScale = 1;
         else
             body.gravityScale = 7;
     }
-    public bool canCast()
+    public bool canAttack()
     {
-        return horizontalInput == 0 && isGrounded();
+        return horizontalInput == 0;
     }
     private void OnDrawGizmos()
     {
@@ -306,7 +309,7 @@ public class AIMovement : MonoBehaviour
         }
     }
 
-    private IEnumerator DelayCastTime()
+    private IEnumerator DelayAttackTime()
     {
         yield return new WaitForSeconds(delayCasting);
         if (fireBallsPrefabs != null)
